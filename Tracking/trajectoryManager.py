@@ -33,27 +33,11 @@ class TrajectoryManager:
 
     def save_trajectories_csv(self, fps, output_csv_path):
         """
-        Save trajectories to a CSV file, each column is a second.
-        Each cell contains (cx, cy) or is empty if no data for that second.
+        Save trajectories to a CSV file: car_id, timestamp (s), cx, cy
         """
-        # Find the max trajectory length in seconds
-        max_frames = max(len(traj) for traj in self.trajectories.values())
-        max_seconds = (max_frames // fps) + 1
-
         with open(output_csv_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            # Header: car_id, sec_0, sec_1, ..., sec_N
-            header = ['car_id'] + [f'sec_{i}' for i in range(max_seconds)]
-            writer.writerow(header)
-
+            writer.writerow(['car_id', 'timestamp', 'cx', 'cy'])
             for car_id, traj in self.trajectories.items():
-                row = [car_id]
-                for sec in range(max_seconds):
-                    # Get frame index for this second
-                    frame_idx = sec * fps
-                    if frame_idx < len(traj):
-                        cx, cy = traj[frame_idx]
-                        row.append(f'({cx},{cy})')
-                    else:
-                        row.append('')
-                writer.writerow(row)
+                for (timestamp, cx, cy) in traj:
+                    writer.writerow([car_id, round(timestamp, 2), cx, cy])
