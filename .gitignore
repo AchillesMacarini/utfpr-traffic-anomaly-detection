@@ -192,3 +192,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+Train_data
+Train_data/*
+trajectories_*.json
+trajectories_*.csv

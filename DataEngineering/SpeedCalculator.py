@@ -6,8 +6,7 @@ import pandas as pd
 import json
 import numpy as np
 
-video_csv = "C:/Users/Achilles/Downloads/trajectories_2.csv"
-video_json = "C:/Users/Achilles/Downloads/trajectories_2.json"
+video_json = "trajectories_2.json"
 
 class SpeedCalculator:
     def __init__(self, json_path, output_csv_path, fps=30):

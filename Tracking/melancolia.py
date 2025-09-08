@@ -3,8 +3,9 @@ import torch
 from tqdm import tqdm
 from ultralytics import YOLO
 from .trajectoryManager import TrajectoryManager
+import json  # Add this import
 
-def run_tracking(file_path, json_out_path, csv_out_path):
+def run_tracking(file_path, json_out_path, csv_out_path, show_stream=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     video_path = file_path
     cap = cv2.VideoCapture(video_path)
@@ -21,9 +22,34 @@ def run_tracking(file_path, json_out_path, csv_out_path):
 
     trajectories = {}
     missing_frames = {}
+    car_frame_data = {}  # {car_id: [ {frame_idx, timestamp, x, y, speed}, ... ] }
 
     frame_idx = 0
-    for _ in tqdm(range(total_frames), desc=f"Processing {file_path}"):
+    prev_positions = {}
+
+    # --- Add trackbar for video seeking in seconds ---
+    if show_stream:
+        window_name = "Tracking Stream"
+        cv2.namedWindow(window_name)
+        total_seconds = int(total_frames / fps)
+        seek_request = [False]  # Use a mutable type to allow modification in callback
+
+        def on_trackbar(val):
+            seek_request[0] = True
+
+        cv2.createTrackbar('Time (s)', window_name, 0, total_seconds, on_trackbar)
+
+    # --- Progress bar setup ---
+    pbar = tqdm(total=total_frames, desc="Processing frames", unit="frame")
+
+    while frame_idx < total_frames:
+        # Only seek if requested by the user
+        if show_stream and seek_request[0]:
+            pos = cv2.getTrackbarPos('Time (s)', window_name)
+            frame_idx = int(pos * fps)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            seek_request[0] = False
+
         ret, frame = cap.read()
         if not ret:
             break
@@ -32,11 +58,11 @@ def run_tracking(file_path, json_out_path, csv_out_path):
             frame,
             persist=True,
             classes=car_class_ids,
-            conf=0.10,  # Diminua para pegar mais detecções
+            conf=0.10,
             verbose=False,
             device=device,
             imgsz=960,
-            tracker='bytetrack.yaml'
+            tracker='botsort.yaml'  # Use BOTSort (supported by Ultralytics)
         )
 
         if results[0].boxes.id is not None:
@@ -54,10 +80,42 @@ def run_tracking(file_path, json_out_path, csv_out_path):
 
                     if car_id not in trajectories:
                         trajectories[car_id] = []
-                    # Salva a posição com timestamp em segundos
                     timestamp = frame_idx / fps
                     trajectories[car_id].append((timestamp, cx, cy))
                     detected_car_ids.add(car_id)
+
+                    # Calculate speed in px/s
+                    speed = 0.0
+                    if car_id in prev_positions:
+                        prev_timestamp, prev_cx, prev_cy = prev_positions[car_id]
+                        dt = timestamp - prev_timestamp
+                        if dt > 0:
+                            dist = ((cx - prev_cx) ** 2 + (cy - prev_cy) ** 2) ** 0.5
+                            speed = dist / dt
+                    prev_positions[car_id] = (timestamp, cx, cy)
+
+                    # --- Collect per-frame data for JSON ---
+                    if car_id not in car_frame_data:
+                        car_frame_data[car_id] = []
+                    car_frame_data[car_id].append({
+                        "frame": frame_idx,
+                        "timestamp": timestamp,
+                        "x": cx,
+                        "y": cy,
+                        "speed": speed
+                    })
+
+                    # Draw bounding box and label if streaming
+                    if show_stream:
+                        label = f"{class_names.get(cls, 'Vehicle')} {track_id}"
+                        coords = f"X:{cx} Y:{cy}"
+                        speed_str = f"{speed:.1f}px/s"
+                        color = (0, 255, 0)
+                        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+                        # Draw label, coordinates, and speed
+                        cv2.putText(frame, label, (int(x1), int(y1)-25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                        cv2.putText(frame, coords, (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                        cv2.putText(frame, speed_str, (int(x1), int(y2)+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             for car_id in trajectories.keys():
                 if car_id not in detected_car_ids:
@@ -65,22 +123,51 @@ def run_tracking(file_path, json_out_path, csv_out_path):
                 else:
                     missing_frames[car_id] = 0
 
+        if show_stream:
+            cv2.imshow(window_name, frame)
+            # Update trackbar position in seconds
+            cv2.setTrackbarPos('Time (s)', window_name, int(frame_idx / fps))
+            key = cv2.waitKey(1)
+            # ESC or Q to quit, P to pause
+            if key == 27 or key == ord('q') or key == ord('Q'):
+                print("Streaming interrupted by user.")
+                break
+            elif key == ord('p') or key == ord('P'):
+                print("Paused. Press P to resume.")
+                while True:
+                    key2 = cv2.waitKey(0)
+                    pos = cv2.getTrackbarPos('Time (s)', window_name)
+                    if int(pos * fps) != frame_idx:
+                        frame_idx = int(pos * fps)
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                        break
+                    if key2 == ord('p') or key2 == ord('P'):
+                        print("Resumed.")
+                        break
+                    elif key2 == 27 or key2 == ord('q') or key2 == ord('Q'):
+                        print("Streaming interrupted by user.")
+                        cap.release()
+                        cv2.destroyAllWindows()
+                        return
+
         frame_idx += 1
+        pbar.update(1)  # Update progress bar
+
+    pbar.close()  # Close progress bar
 
     cap.release()
+    if show_stream:
+        cv2.destroyAllWindows()
 
-    # Salvar as trajetórias em JSON e CSV
-    tm = TrajectoryManager(json_out_path)
-    for car_id, traj in trajectories.items():
-        tm.add_trajectory(car_id, traj)
-    tm.save_trajectories()
-    tm.save_trajectories_csv(int(fps), csv_out_path)
-    print(f"Trajetórias salvas em {csv_out_path}.")
+    # --- Save car_frame_data to JSON ---
+    with open(json_out_path, "w") as f:
+        json.dump(car_frame_data, f, indent=2)
 
 # To run directly if this file is executed
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) != 4:
-        print("Uso: python melancolia.py <video_path> <json_out_path> <csv_out_path>")
+    if len(sys.argv) not in [4, 5]:
+        print("Uso: python melancolia.py <video_path> <json_out_path> <csv_out_path> [stream]")
     else:
-        run_tracking(sys.argv[1], sys.argv[2], sys.argv[3])
+        show_stream = len(sys.argv) == 5 and sys.argv[4].lower() == "stream"
+        run_tracking(sys.argv[1], sys.argv[2], sys.argv[3], show_stream)
