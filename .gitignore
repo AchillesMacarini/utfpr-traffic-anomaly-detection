@@ -197,3 +197,6 @@ Train_data
 Train_data/*
 trajectories_*.json
 trajectories_*.csv
+sequences/anomalies_sequences.npz
+sequences/trajectories_*_sequences.npz
+training_log.txt
