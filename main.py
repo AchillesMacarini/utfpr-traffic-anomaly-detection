@@ -5,8 +5,8 @@ import numpy as np
 import os
 
 def main():
-    video_dir = r"C:/Users/Achilles/dev/utfpr-traffic-anomaly-detection"
-    annotation_file = r"C:/Users/Achilles/dev/utfpr-traffic-anomaly-detection/train-anomaly-results.csv"
+    video_dir = r"extractedData"
+    annotation_file = r"train-anomaly-results.csv"
 
     print("Loading and processing data...")
     # Load anomaly annotations
@@ -51,6 +51,8 @@ def main():
     if len(X.shape) == 2:  # (samples, sequence_length)
         X = X[..., np.newaxis]  # Add feature dimension
     
+    X = X.astype(np.float32)
+
     print(f"Final data shape: {X.shape}")
     
     # Initialize WGAN-GP model with correct input shape
@@ -63,4 +65,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    wgan_gp.print_cuda_info()  # Print CUDA information
+   
