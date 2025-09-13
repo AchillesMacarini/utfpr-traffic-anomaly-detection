@@ -1,4 +1,5 @@
 from DataEngineering.anomalyProcessing import load_anomaly_annotations, extract_and_save_sequences
+from Models import wgan_gp
 from Models.wgan_gp import WGAN_GP
 import numpy as np
 import os
@@ -58,7 +59,8 @@ def main():
     
     print("Training WGAN-GP model...")
     # Train the WGAN-GP model
-    wgan_gp.train(X, epochs=10, batch_size=8)  # Reduce epochs/batch_size for testing
+    wgan_gp.train(X, epochs=1, batch_size=128)  # Use larger batch size for GPU
 
 if __name__ == "__main__":
     main()
+    wgan_gp.print_cuda_info()  # Print CUDA information
