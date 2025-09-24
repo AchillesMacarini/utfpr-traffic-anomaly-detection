@@ -200,3 +200,4 @@ trajectories_*.csv
 sequences/anomalies_sequences.npz
 sequences/trajectories_*_sequences.npz
 training_log.txt
+yolov8x.pt
