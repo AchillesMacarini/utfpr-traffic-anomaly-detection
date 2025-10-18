@@ -12,7 +12,7 @@ def run_melancolia_batch():
     os.makedirs(output_directory, exist_ok=True)
     
     # Process videos 1.mp4 to 66.mp4
-    for i in range(1, 67):
+    for i in range(5, 6):
         video_file = f"{i}.mp4"
         video_path = os.path.join(video_directory, video_file)
         
