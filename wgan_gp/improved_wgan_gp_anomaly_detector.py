@@ -14,19 +14,19 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class ImprovedAnomalyLabels:
-    """Classe melhorada para gerenciar rótulos de anomalias"""
+    """Improved class for managing anomaly labels"""
     
     def __init__(self, csv_path: str, fps: float = 30.0):
         self.csv_path = csv_path
         self.fps = fps
         self.anomaly_intervals = {}
-        self.video_durations = {}  # Adicionar durações dos vídeos
+        self.video_durations = {}  # Add video durations
         
-        print(f"📋 Carregando rótulos de anomalias de: {csv_path}")
+        print(f"Loading anomaly labels from: {csv_path}")
         self._load_anomaly_data()
     
     def _load_anomaly_data(self):
-        """Carrega dados de anomalias do CSV com melhor processamento"""
+        """Load anomaly data from CSV with improved processing"""
         try:
             df = pd.read_csv(self.csv_path)
             
@@ -40,36 +40,36 @@ class ImprovedAnomalyLabels:
                 
                 self.anomaly_intervals[video_id].append((start_time, end_time))
                 
-                # Estimar duração do vídeo baseada na maior anomalia
+                # Estimate video duration based on largest anomaly
                 if video_id not in self.video_durations:
                     self.video_durations[video_id] = end_time
                 else:
                     self.video_durations[video_id] = max(self.video_durations[video_id], end_time)
             
-            # Adicionar margem de segurança às durações
+            # Add safety margin to durations
             for video_id in self.video_durations:
-                self.video_durations[video_id] += 100  # +100 segundos de margem
+                self.video_durations[video_id] += 100  # +100 seconds margin
             
             total_anomalies = sum(len(intervals) for intervals in self.anomaly_intervals.values())
-            print(f"✅ Carregados {total_anomalies} intervalos de anomalias para {len(self.anomaly_intervals)} vídeos")
+            print(f"Loaded {total_anomalies} anomaly intervals for {len(self.anomaly_intervals)} videos")
             
-            # Estatísticas detalhadas
+            # Detailed statistics
             for video_id, intervals in self.anomaly_intervals.items():
                 total_anomaly_time = sum(end - start for start, end in intervals)
                 video_duration = self.video_durations.get(video_id, 900)  # Default 15 min
                 anomaly_percentage = (total_anomaly_time / video_duration) * 100
-                print(f"   Vídeo {video_id}: {len(intervals)} anomalias, {total_anomaly_time:.1f}s ({anomaly_percentage:.1f}% do vídeo)")
+                print(f"   Video {video_id}: {len(intervals)} anomalies, {total_anomaly_time:.1f}s ({anomaly_percentage:.1f}% of video)")
             
         except Exception as e:
-            print(f"❌ Erro ao carregar anomalias: {e}")
+            print(f"Error loading anomalies: {e}")
             self.anomaly_intervals = {}
     
     def has_anomalies(self, video_id: int) -> bool:
-        """Verifica se um vídeo possui anomalias conhecidas"""
+        """Check if a video has known anomalies"""
         return video_id in self.anomaly_intervals and len(self.anomaly_intervals[video_id]) > 0
     
     def get_anomaly_ratio(self, video_id: int) -> float:
-        """Retorna a proporção de tempo anômalo no vídeo"""
+        """Return the proportion of anomalous time in the video"""
         if not self.has_anomalies(video_id):
             return 0.0
         
@@ -79,14 +79,14 @@ class ImprovedAnomalyLabels:
 
 
 class BalancedTrajectoryDataset(Dataset):
-    """Dataset balanceado para melhor treinamento"""
+    """Balanced dataset for better training"""
     
     def __init__(self, data_dir: str, anomaly_labels: Optional[ImprovedAnomalyLabels] = None, 
                  train_split: float = 0.8, use_only_normal_videos: bool = True, 
                  max_trajectories_per_video: int = 200, balance_ratio: float = 0.3):
         """
         Args:
-            balance_ratio: Proporção de trajetórias anômalas na validação (0.3 = 30%)
+            balance_ratio: Proportion of anomalous trajectories in validation (0.3 = 30%)
         """
         self.data_dir = data_dir
         self.anomaly_labels = anomaly_labels
@@ -94,21 +94,21 @@ class BalancedTrajectoryDataset(Dataset):
         self.max_trajectories_per_video = max_trajectories_per_video
         self.balance_ratio = balance_ratio
         
-        # Carregar e processar dados
+        # Load and process data
         self._load_and_process_data()
     
     def _load_and_process_data(self):
-        """Carrega e processa dados com melhor balanceamento"""
+        """Load and process data with better balancing"""
         
         npy_files = [f for f in os.listdir(self.data_dir) if f.endswith('_trajectories_processed.npy')]
         npy_files.sort(key=lambda x: int(x.split('_')[0]))
         
-        print(f"📁 Carregando trajetórias de {len(npy_files)} arquivos...")
+        print(f"Loading trajectories from {len(npy_files)} files...")
         
         normal_videos = []
         anomaly_videos = []
         
-        with tqdm(total=len(npy_files), desc="Carregando dados", unit="file") as pbar:
+        with tqdm(total=len(npy_files), desc="Loading data", unit="file") as pbar:
             for npy_file in npy_files:
                 video_id = int(npy_file.split('_')[0])
                 file_path = os.path.join(self.data_dir, npy_file)
@@ -116,65 +116,65 @@ class BalancedTrajectoryDataset(Dataset):
                 try:
                     trajectories = np.load(file_path)
                     if len(trajectories) > 0:
-                        # Amostrar trajetórias para evitar overfitting
+                        # Sample trajectories to avoid overfitting
                         if len(trajectories) > self.max_trajectories_per_video:
                             indices = np.random.choice(len(trajectories), self.max_trajectories_per_video, replace=False)
                             trajectories = trajectories[indices]
                         
-                        # Classificar vídeo
+                        # Classify video
                         if self.anomaly_labels and self.anomaly_labels.has_anomalies(video_id):
                             anomaly_ratio = self.anomaly_labels.get_anomaly_ratio(video_id)
                             anomaly_videos.append((video_id, trajectories, anomaly_ratio))
-                            video_type = f"anômalo ({anomaly_ratio:.1%})"
+                            video_type = f"anomalous ({anomaly_ratio:.1%})"
                         else:
                             normal_videos.append((video_id, trajectories))
                             video_type = "normal"
                         
-                        pbar.set_postfix({'Vídeo': f'{video_id} ({video_type})', 'Trajs': len(trajectories)})
+                        pbar.set_postfix({'Video': f'{video_id} ({video_type})', 'Trajs': len(trajectories)})
                         
                 except Exception as e:
-                    print(f"⚠️ Erro ao carregar {npy_file}: {e}")
+                    print(f"Error loading {npy_file}: {e}")
                 
                 pbar.update(1)
         
         self._prepare_balanced_data(normal_videos, anomaly_videos)
         
-        print(f"✅ Dataset balanceado carregado:")
-        print(f"   Vídeos normais: {len(normal_videos)}")
-        print(f"   Vídeos com anomalias: {len(anomaly_videos)}")
-        print(f"   Treino: {len(self.train_trajectories)} trajetórias")
-        print(f"   Validação: {len(self.val_trajectories)} trajetórias")
-        print(f"   Validação - Normal: {np.sum(~self.val_has_anomaly)}, Anômalo: {np.sum(self.val_has_anomaly)}")
+        print(f"Balanced dataset loaded:")
+        print(f"   Normal videos: {len(normal_videos)}")
+        print(f"   Videos with anomalies: {len(anomaly_videos)}")
+        print(f"   Training: {len(self.train_trajectories)} trajectories")
+        print(f"   Validation: {len(self.val_trajectories)} trajectories")
+        print(f"   Validation - Normal: {np.sum(~self.val_has_anomaly)}, Anomalous: {np.sum(self.val_has_anomaly)}")
     
     def _prepare_balanced_data(self, normal_videos: List, anomaly_videos: List):
-        """Prepara dados com melhor balanceamento"""
+        """Prepare data with better balancing"""
         
-        # Treino: apenas vídeos normais
+        # Training: only normal videos
         if self.use_only_normal_videos:
             normal_trajectories = [traj for _, traj in normal_videos]
             if normal_trajectories:
                 all_normal = np.concatenate(normal_trajectories, axis=0)
                 
-                # Dividir trajetórias normais
+                # Split normal trajectories
                 n_normal = len(all_normal)
-                n_train_normal = int(n_normal * 0.8)  # 80% para treino
+                n_train_normal = int(n_normal * 0.8)  # 80% for training
                 
                 indices = np.random.permutation(n_normal)
                 self.train_trajectories = all_normal[indices[:n_train_normal]]
                 val_normal_traj = all_normal[indices[n_train_normal:]]
                 
-                print(f"🔍 Usando {len(self.train_trajectories)} trajetórias normais para treino")
+                print(f"Using {len(self.train_trajectories)} normal trajectories for training")
             else:
-                raise ValueError("Nenhum vídeo normal encontrado!")
+                raise ValueError("No normal videos found!")
         
-        # Validação balanceada
+        # Balanced validation
         n_val_normal = len(val_normal_traj)
         n_val_anomaly = int(n_val_normal * self.balance_ratio / (1 - self.balance_ratio))
         
-        # Selecionar trajetórias anômalas para validação
+        # Select anomalous trajectories for validation
         val_anomaly_trajectories = []
         if anomaly_videos and n_val_anomaly > 0:
-            # Priorizar vídeos com maior proporção de anomalias
+            # Prioritize videos with higher anomaly proportion
             anomaly_videos.sort(key=lambda x: x[2], reverse=True)
             
             collected_anomaly = 0
@@ -182,7 +182,7 @@ class BalancedTrajectoryDataset(Dataset):
                 if collected_anomaly >= n_val_anomaly:
                     break
                 
-                # Pegar uma amostra das trajetórias deste vídeo
+                # Take a sample of trajectories from this video
                 n_take = min(len(trajectories), n_val_anomaly - collected_anomaly)
                 if n_take > 0:
                     indices = np.random.choice(len(trajectories), n_take, replace=False)
@@ -197,14 +197,14 @@ class BalancedTrajectoryDataset(Dataset):
         else:
             val_anomaly_trajectories = np.empty((0, val_normal_traj.shape[1], val_normal_traj.shape[2]))
         
-        # Combinar validação
+        # Combine validation
         self.val_trajectories = np.concatenate([val_normal_traj, val_anomaly_trajectories], axis=0)
         self.val_has_anomaly = np.concatenate([
             np.zeros(len(val_normal_traj), dtype=bool),
             np.ones(len(val_anomaly_trajectories), dtype=bool)
         ])
         
-        # Embaralhar validação
+        # Shuffle validation
         val_indices = np.random.permutation(len(self.val_trajectories))
         self.val_trajectories = self.val_trajectories[val_indices]
         self.val_has_anomaly = self.val_has_anomaly[val_indices]
@@ -223,7 +223,7 @@ class BalancedTrajectoryDataset(Dataset):
 
 
 class ImprovedGenerator(nn.Module):
-    """Gerador melhorado com arquitetura mais expressiva"""
+    """Improved generator with more expressive architecture"""
     
     def __init__(self, noise_dim: int = 128, seq_len: int = 20, feature_dim: int = 5):
         super(ImprovedGenerator, self).__init__()
@@ -232,7 +232,7 @@ class ImprovedGenerator(nn.Module):
         self.seq_len = seq_len
         self.feature_dim = feature_dim
         
-        # Arquitetura mais profunda e expressiva
+        # Deeper and more expressive architecture
         self.noise_proj = nn.Sequential(
             nn.Linear(noise_dim, 256),
             nn.BatchNorm1d(256),
@@ -245,7 +245,7 @@ class ImprovedGenerator(nn.Module):
             nn.Dropout(0.2),
         )
         
-        # LSTM para dependências temporais
+        # LSTM for temporal dependencies
         self.lstm = nn.LSTM(
             input_size=512,
             hidden_size=256,
@@ -254,7 +254,7 @@ class ImprovedGenerator(nn.Module):
             dropout=0.2
         )
         
-        # Camadas finais
+        # Final layers
         self.output_proj = nn.Sequential(
             nn.Linear(256, 128),
             nn.BatchNorm1d(128),
@@ -281,17 +281,17 @@ class ImprovedGenerator(nn.Module):
     def forward(self, noise):
         batch_size = noise.size(0)
         
-        # Projetar ruído
+        # Project noise
         projected = self.noise_proj(noise)  # [batch, 512]
         
-        # Expandir para sequência temporal
+        # Expand to temporal sequence
         sequence = projected.unsqueeze(1).repeat(1, self.seq_len, 1)  # [batch, seq_len, 512]
         
-        # LSTM para dependências temporais
-        with torch.backends.cudnn.flags(enabled=False):  # Para evitar problemas com gradient penalty
+        # LSTM for temporal dependencies
+        with torch.backends.cudnn.flags(enabled=False):  # To avoid issues with gradient penalty
             lstm_out, _ = self.lstm(sequence)  # [batch, seq_len, 256]
         
-        # Reshape e output
+        # Reshape and output
         lstm_out = lstm_out.contiguous().view(-1, 256)  # [batch*seq_len, 256]
         output = self.output_proj(lstm_out)  # [batch*seq_len, feature_dim]
         
@@ -299,7 +299,7 @@ class ImprovedGenerator(nn.Module):
 
 
 class ImprovedDiscriminator(nn.Module):
-    """Discriminador melhorado com arquitetura híbrida"""
+    """Improved discriminator with hybrid architecture"""
     
     def __init__(self, seq_len: int = 20, feature_dim: int = 5):
         super(ImprovedDiscriminator, self).__init__()
@@ -307,7 +307,7 @@ class ImprovedDiscriminator(nn.Module):
         self.seq_len = seq_len
         self.feature_dim = feature_dim
         
-        # Camadas convolucionais para features espaciais
+        # Convolutional layers for spatial features
         self.conv_layers = nn.Sequential(
             nn.Conv1d(feature_dim, 64, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2),
@@ -322,7 +322,7 @@ class ImprovedDiscriminator(nn.Module):
             nn.Dropout(0.2),
         )
         
-        # LSTM para dependências temporais
+        # LSTM for temporal dependencies
         self.lstm = nn.LSTM(
             input_size=256,
             hidden_size=128,
@@ -332,9 +332,9 @@ class ImprovedDiscriminator(nn.Module):
             bidirectional=True
         )
         
-        # Classificador final
+        # Final classifier
         self.classifier = nn.Sequential(
-            nn.Linear(256, 128),  # 256 por causa do bidirectional
+            nn.Linear(256, 128),  # 256 because of bidirectional
             nn.LeakyReLU(0.2),
             nn.Dropout(0.3),
             nn.Linear(128, 64),
@@ -361,54 +361,54 @@ class ImprovedDiscriminator(nn.Module):
     def forward(self, trajectories):
         batch_size = trajectories.size(0)
         
-        # Conv1D para features espaciais: [batch, feature_dim, seq_len]
+        # Conv1D for spatial features: [batch, feature_dim, seq_len]
         x = trajectories.transpose(1, 2)
         conv_out = self.conv_layers(x)  # [batch, 256, seq_len]
         
-        # Voltar para formato LSTM: [batch, seq_len, 256]
+        # Back to LSTM format: [batch, seq_len, 256]
         conv_out = conv_out.transpose(1, 2)
         
-        # LSTM para dependências temporais
+        # LSTM for temporal dependencies
         with torch.backends.cudnn.flags(enabled=False):
             lstm_out, (hidden, _) = self.lstm(conv_out)
         
-        # Usar último estado oculto
+        # Use last hidden state
         final_hidden = torch.cat([hidden[-2], hidden[-1]], dim=1)  # [batch, 256]
         
-        # Classificação final
+        # Final classification
         output = self.classifier(final_hidden)
         
         return output.squeeze()
 
 
 class ImprovedWGANGPAnomalyDetector:
-    """Sistema melhorado de detecção de anomalias"""
+    """Improved anomaly detection system"""
     
     def __init__(self, device: str = None, seq_len: int = 20, feature_dim: int = 5):
         self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')
         self.seq_len = seq_len
         self.feature_dim = feature_dim
         
-        print(f"🔧 Inicializando WGAN-GP melhorado no device: {self.device}")
+        print(f"Initializing improved WGAN-GP on device: {self.device}")
         
-        # Hiperparâmetros otimizados
+        # Optimized hyperparameters
         self.noise_dim = 128
-        self.lr_g = 0.0001    # Reduzido para estabilidade
-        self.lr_d = 0.0004    # Maior para discriminador
+        self.lr_g = 0.0001    # Reduced for stability
+        self.lr_d = 0.0004    # Higher for discriminator
         self.beta1 = 0.0
         self.beta2 = 0.9
         self.lambda_gp = 10
-        self.n_critic = 5     # Voltar para 5 para melhor treinamento
+        self.n_critic = 5     # Back to 5 for better training
         
-        # Inicializar redes
+        # Initialize networks
         self.generator = ImprovedGenerator(self.noise_dim, seq_len, feature_dim).to(self.device)
         self.discriminator = ImprovedDiscriminator(seq_len, feature_dim).to(self.device)
         
-        # Otimizadores
+        # Optimizers
         self.optim_G = optim.Adam(self.generator.parameters(), lr=self.lr_g, betas=(self.beta1, self.beta2))
         self.optim_D = optim.Adam(self.discriminator.parameters(), lr=self.lr_d, betas=(self.beta1, self.beta2))
         
-        # Histórico
+        # History
         self.history = {
             'g_loss': [],
             'd_loss': [],
@@ -417,14 +417,14 @@ class ImprovedWGANGPAnomalyDetector:
         }
     
     def gradient_penalty(self, real_data: torch.Tensor, fake_data: torch.Tensor) -> torch.Tensor:
-        """Gradient penalty otimizado"""
+        """Optimized gradient penalty"""
         batch_size = real_data.size(0)
         
         alpha = torch.rand(batch_size, 1, 1).to(self.device)
         interpolated = alpha * real_data + (1 - alpha) * fake_data
         interpolated.requires_grad_(True)
         
-        # Desabilitar CuDNN temporariamente para o forward pass
+        # Temporarily disable CuDNN for forward pass
         with torch.backends.cudnn.flags(enabled=False):
             d_interpolated = self.discriminator(interpolated)
         

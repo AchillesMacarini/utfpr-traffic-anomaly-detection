@@ -16,12 +16,12 @@ warnings.filterwarnings('ignore')
 physical_devices = tf.config.experimental.list_physical_devices('GPU')
 if len(physical_devices) > 0:
     tf.config.experimental.set_memory_growth(physical_devices[0], True)
-    print(f"🚀 TensorFlow usando GPU: {physical_devices[0]}")
+    print(f"TensorFlow using GPU: {physical_devices[0]}")
 else:
-    print("🔧 TensorFlow usando CPU")
+    print("TensorFlow using CPU")
 
 class TrafficAnomalyLabels:
-    """Gerenciador otimizado de rótulos de anomalias de tráfego"""
+    """Optimized traffic anomaly label manager"""
     
     def __init__(self, csv_path: str, fps: float = 30.0):
         self.csv_path = csv_path
@@ -29,11 +29,11 @@ class TrafficAnomalyLabels:
         self.anomaly_intervals = {}
         self.video_stats = {}
         
-        print(f"📋 Carregando ground truth: {csv_path}")
+        print(f"Loading ground truth: {csv_path}")
         self._load_anomaly_data()
     
     def _load_anomaly_data(self):
-        """Carrega e processa dados de anomalias"""
+        """Loads and processes anomaly data"""
         try:
             df = pd.read_csv(self.csv_path)
             
@@ -53,16 +53,16 @@ class TrafficAnomalyLabels:
                 
                 self.anomaly_intervals[video_id].append((start_time, end_time))
                 
-                # Atualizar estatísticas
+                # Update statistics
                 stats = self.video_stats[video_id]
                 stats['total_anomaly_time'] += duration
                 stats['anomaly_count'] += 1
                 stats['severity_score'] = np.log1p(stats['total_anomaly_time']) * stats['anomaly_count']
             
-            print(f"✅ {len(self.anomaly_intervals)} vídeos com anomalias carregados")
+            print(f"Loaded {len(self.anomaly_intervals)} videos with anomalies")
             
         except Exception as e:
-            print(f"❌ Erro ao carregar anomalias: {e}")
+            print(f"Error loading anomalies: {e}")
             self.anomaly_intervals = {}
     
     def has_anomalies(self, video_id: int) -> bool:
@@ -73,7 +73,7 @@ class TrafficAnomalyLabels:
 
 
 class TrafficTrajectoryDataset:
-    """Dataset otimizado para trajetórias de tráfego"""
+    """Optimized dataset for traffic trajectories"""
     
     def __init__(self, data_dir: str, anomaly_labels: Optional[TrafficAnomalyLabels] = None, 
                  max_trajectories_per_video: int = 500, validation_split: float = 0.2):
@@ -82,17 +82,17 @@ class TrafficTrajectoryDataset:
         self.max_trajectories_per_video = max_trajectories_per_video
         self.validation_split = validation_split
         
-        # Scaler para normalização
+        # Scaler for normalization
         self.scaler = StandardScaler()
         
         self._load_and_process_data()
     
     def _load_and_process_data(self):
-        """Carrega e processa dados de trajetórias"""
+        """Loads and processes trajectory data"""
         npy_files = [f for f in os.listdir(self.data_dir) if f.endswith('_trajectories_processed.npy')]
         npy_files.sort(key=lambda x: int(x.split('_')[0]))
         
-        print(f"📁 Processando {len(npy_files)} arquivos de trajetórias...")
+        print(f"Processing {len(npy_files)} trajectory files...")
         
         normal_trajectories = []
         anomaly_trajectories = []
@@ -107,60 +107,60 @@ class TrafficTrajectoryDataset:
                 if len(trajectories) == 0:
                     continue
                 
-                # Limitar quantidade por arquivo
+                # Limit quantity per file
                 if len(trajectories) > self.max_trajectories_per_video:
                     indices = np.random.choice(len(trajectories), self.max_trajectories_per_video, replace=False)
                     trajectories = trajectories[indices]
                 
-                # Verificar qualidade dos dados
+                # Check data quality
                 if not self._is_valid_trajectory_data(trajectories):
-                    print(f"⚠️ Dados inválidos em {npy_file}")
+                    print(f"Invalid data in {npy_file}")
                     continue
                 
-                # Classificar como normal ou anômalo
+                # Classify as normal or anomalous
                 if self.anomaly_labels and self.anomaly_labels.has_anomalies(video_id):
                     anomaly_trajectories.append(trajectories)
-                    print(f"   📹 {npy_file}: {len(trajectories)} trajetórias ANÔMALAS")
+                    print(f"   {npy_file}: {len(trajectories)} ANOMALOUS trajectories")
                 else:
                     normal_trajectories.append(trajectories)
-                    print(f"   📹 {npy_file}: {len(trajectories)} trajetórias normais")
+                    print(f"   {npy_file}: {len(trajectories)} normal trajectories")
                     
             except Exception as e:
-                print(f"❌ Erro ao carregar {npy_file}: {e}")
+                print(f"Error loading {npy_file}: {e}")
         
-        # Preparar dados finais
+        # Prepare final data
         self._prepare_final_datasets(normal_trajectories, anomaly_trajectories)
         
-        print(f"✅ Dataset preparado:")
-        print(f"   Treino: {self.train_data.shape}")
-        print(f"   Validação: {self.val_data.shape}")
-        print(f"   Rótulos val - Normal: {np.sum(~self.val_labels)}, Anômalo: {np.sum(self.val_labels)}")
+        print(f"Dataset prepared:")
+        print(f"   Train: {self.train_data.shape}")
+        print(f"   Validation: {self.val_data.shape}")
+        print(f"   Val labels - Normal: {np.sum(~self.val_labels)}, Anomalous: {np.sum(self.val_labels)}")
     
     def _is_valid_trajectory_data(self, trajectories: np.ndarray) -> bool:
-        """Verifica se os dados de trajetória são válidos"""
+        """Checks if trajectory data is valid"""
         if trajectories.size == 0:
             return False
         
-        # Verificar NaN/Inf
+        # Check NaN/Inf
         if np.any(np.isnan(trajectories)) or np.any(np.isinf(trajectories)):
             return False
         
-        # Verificar dimensões
+        # Check dimensions
         if len(trajectories.shape) != 3:
             return False
         
         return True
     
     def _prepare_final_datasets(self, normal_trajectories: List, anomaly_trajectories: List):
-        """Prepara datasets finais de treino e validação"""
+        """Prepares final training and validation datasets"""
         
-        # Concatenar trajetórias normais
+        # Concatenate normal trajectories
         if normal_trajectories:
             all_normal = np.concatenate(normal_trajectories, axis=0)
         else:
-            raise ValueError("Nenhuma trajetória normal encontrada!")
+            raise ValueError("No normal trajectories found!")
         
-        # Dividir trajetórias normais em treino e validação
+        # Split normal trajectories into train and validation
         n_normal = len(all_normal)
         n_val_normal = int(n_normal * self.validation_split)
         
@@ -168,22 +168,22 @@ class TrafficTrajectoryDataset:
         val_normal_indices = indices[:n_val_normal]
         train_indices = indices[n_val_normal:]
         
-        # Dados de treino (apenas normais)
+        # Training data (only normal)
         self.train_data = all_normal[train_indices]
         val_normal_data = all_normal[val_normal_indices]
         
-        # Preparar dados de validação balanceados
+        # Prepare balanced validation data
         if anomaly_trajectories:
             all_anomalies = np.concatenate(anomaly_trajectories, axis=0)
             
-            # Balancear: usar proporção similar de anomalias
-            n_val_anomaly = min(len(all_anomalies), n_val_normal // 2)  # 33% anomalias
+            # Balance: use similar proportion of anomalies
+            n_val_anomaly = min(len(all_anomalies), n_val_normal // 2)  # 33% anomalies
             
             if n_val_anomaly > 0:
                 anomaly_indices = np.random.choice(len(all_anomalies), n_val_anomaly, replace=False)
                 val_anomaly_data = all_anomalies[anomaly_indices]
                 
-                # Combinar validação
+                # Combine validation
                 self.val_data = np.concatenate([val_normal_data, val_anomaly_data], axis=0)
                 self.val_labels = np.concatenate([
                     np.zeros(len(val_normal_data), dtype=bool),
@@ -196,35 +196,35 @@ class TrafficTrajectoryDataset:
             self.val_data = val_normal_data
             self.val_labels = np.zeros(len(val_normal_data), dtype=bool)
         
-        # Embaralhar validação
+        # Shuffle validation
         val_indices = np.random.permutation(len(self.val_data))
         self.val_data = self.val_data[val_indices]
         self.val_labels = self.val_labels[val_indices]
         
-        # Normalizar dados
+        # Normalize data
         self._normalize_data()
     
     def _normalize_data(self):
-        """Normaliza os dados usando StandardScaler"""
-        # Reshape para normalização
+        """Normalizes data using StandardScaler"""
+        # Reshape for normalization
         original_train_shape = self.train_data.shape
         original_val_shape = self.val_data.shape
         
         train_flat = self.train_data.reshape(-1, original_train_shape[-1])
         val_flat = self.val_data.reshape(-1, original_val_shape[-1])
         
-        # Fit no treino, transform em ambos
+        # Fit on train, transform both
         train_normalized = self.scaler.fit_transform(train_flat)
         val_normalized = self.scaler.transform(val_flat)
         
-        # Reshape de volta
+        # Reshape back
         self.train_data = train_normalized.reshape(original_train_shape)
         self.val_data = val_normalized.reshape(original_val_shape)
         
-        print("🔧 Dados normalizados com StandardScaler")
+        print("Data normalized with StandardScaler")
     
     def get_train_dataset(self, batch_size: int = 64):
-        """Retorna dataset TensorFlow para treino"""
+        """Returns TensorFlow dataset for training"""
         dataset = tf.data.Dataset.from_tensor_slices(self.train_data.astype(np.float32))
         dataset = dataset.shuffle(buffer_size=1000)
         dataset = dataset.batch(batch_size)
@@ -232,46 +232,46 @@ class TrafficTrajectoryDataset:
         return dataset
     
     def get_validation_data(self):
-        """Retorna dados de validação"""
+        """Returns validation data"""
         return self.val_data.astype(np.float32), self.val_labels
 
 
 # =============================================================================
-# DEFININDO PARÂMETROS
+# DEFINING PARAMETERS
 # =============================================================================
 
-# Parâmetros da arquitetura
-SEQUENCE_LENGTH = 20    # Comprimento das sequências de trajetória
-FEATURE_DIM = 5        # Dimensões das features (x, y, vx, vy, etc.)
-NOISE_DIM = 128        # Dimensão do ruído de entrada
-BATCH_SIZE = 64        # Tamanho do batch
+# Architecture parameters
+SEQUENCE_LENGTH = 20    # Length of trajectory sequences
+FEATURE_DIM = 5        # Feature dimensions (x, y, vx, vy, etc.)
+NOISE_DIM = 128        # Input noise dimension
+BATCH_SIZE = 64        # Batch size
 
-# Parâmetros de treinamento
-EPOCHS = 100           # Número de épocas
-D_STEPS = 2           # Passos do discriminador por passo do gerador
-GP_WEIGHT = 5.0      # Peso do gradient penalty
-LEARNING_RATE_G = 0.0002  # Taxa de aprendizado do gerador
-LEARNING_RATE_D = 0.0001  # Taxa de aprendizado do discriminador
+# Training parameters
+EPOCHS = 100           # Number of epochs
+D_STEPS = 2           # Discriminator steps per generator step
+GP_WEIGHT = 5.0      # Gradient penalty weight
+LEARNING_RATE_G = 0.0002  # Generator learning rate
+LEARNING_RATE_D = 0.0001  # Discriminator learning rate
 
-print("🔧 Parâmetros definidos:")
+print("Parameters defined:")
 print(f"   Sequence Length: {SEQUENCE_LENGTH}")
 print(f"   Feature Dim: {FEATURE_DIM}")
 print(f"   Noise Dim: {NOISE_DIM}")
 print(f"   Batch Size: {BATCH_SIZE}")
 
 # =============================================================================
-# CONSTRUINDO A ARQUITETURA DO GERADOR
+# BUILDING GENERATOR ARCHITECTURE
 # =============================================================================
 
 def build_generator(noise_dim: int, sequence_length: int, feature_dim: int):
     """
-    Constrói o gerador para sequências de trajetórias
+    Builds generator for trajectory sequences
     """
     
     # Input layer
     noise_input = layers.Input(shape=(noise_dim,), name="noise_input")
     
-    # Dense layers para projeção inicial
+    # Dense layers for initial projection
     x = layers.Dense(256, use_bias=False)(noise_input)
     x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU(0.2)(x)
@@ -282,15 +282,15 @@ def build_generator(noise_dim: int, sequence_length: int, feature_dim: int):
     x = layers.LeakyReLU(0.2)(x)
     x = layers.Dropout(0.3)(x)
     
-    # Projeção para sequência temporal
+    # Projection to temporal sequence
     x = layers.Dense(sequence_length * 256, use_bias=False)(x)
     x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU(0.2)(x)
     
-    # Reshape para sequência
+    # Reshape to sequence
     x = layers.Reshape((sequence_length, 256))(x)
     
-    # LSTM layers para dependências temporais
+    # LSTM layers for temporal dependencies
     x = layers.LSTM(128, return_sequences=True)(x)
     x = layers.Dropout(0.3)(x)
     
@@ -310,17 +310,17 @@ def build_generator(noise_dim: int, sequence_length: int, feature_dim: int):
     
     return generator
 
-# Criar gerador
+# Create generator
 generator = build_generator(NOISE_DIM, SEQUENCE_LENGTH, FEATURE_DIM)
 generator.summary()
 
 # =============================================================================
-# CONSTRUINDO A ARQUITETURA DO DISCRIMINADOR
+# BUILDING DISCRIMINATOR ARCHITECTURE
 # =============================================================================
 
 def build_discriminator(sequence_length: int, feature_dim: int):
     """
-    Constrói o discriminador para sequências de trajetórias
+    Builds discriminator for trajectory sequences
     """
     
     # Input layer
@@ -329,7 +329,7 @@ def build_discriminator(sequence_length: int, feature_dim: int):
         name="trajectory_input"
     )
     
-    # Convolutional layers para features espaciais-temporais
+    # Convolutional layers for spatial-temporal features
     x = layers.Conv1D(64, kernel_size=3, strides=1, padding='same')(trajectory_input)
     x = layers.LeakyReLU(0.2)(x)
     x = layers.Dropout(0.3)(x)
@@ -342,19 +342,19 @@ def build_discriminator(sequence_length: int, feature_dim: int):
     x = layers.LeakyReLU(0.2)(x)
     x = layers.Dropout(0.3)(x)
     
-    # LSTM para capturar dependências temporais
+    # LSTM to capture temporal dependencies
     x = layers.LSTM(128, return_sequences=True)(x)
     x = layers.Dropout(0.3)(x)
     
-    x = layers.LSTM(64)(x)  # return_sequences=False para último estado
+    x = layers.LSTM(64)(x)  # return_sequences=False for last state
     x = layers.Dropout(0.3)(x)
     
-    # Dense layers finais
+    # Final dense layers
     x = layers.Dense(64)(x)
     x = layers.LeakyReLU(0.2)(x)
     x = layers.Dropout(0.3)(x)
     
-    # Output layer (sem ativação para WGAN)
+    # Output layer (no activation for WGAN)
     validity = layers.Dense(1, name="validity")(x)
     
     discriminator = keras.Model(
@@ -365,17 +365,17 @@ def build_discriminator(sequence_length: int, feature_dim: int):
     
     return discriminator
 
-# Criar discriminador
+# Create discriminator
 discriminator = build_discriminator(SEQUENCE_LENGTH, FEATURE_DIM)
 discriminator.summary()
 
 # =============================================================================
-# CRIANDO O MODELO WGAN GERAL
+# CREATING GENERAL WGAN MODEL
 # =============================================================================
 
 class TrafficWGAN(keras.Model):
     """
-    Implementação completa do WGAN-GP para detecção de anomalias em tráfego
+    Complete WGAN-GP implementation for traffic anomaly detection
     """
     
     def __init__(self, discriminator, generator, noise_dim, gp_weight=10.0, d_steps=5):
@@ -386,7 +386,7 @@ class TrafficWGAN(keras.Model):
         self.gp_weight = gp_weight
         self.d_steps = d_steps
         
-        # Métricas para tracking
+        # Metrics for tracking
         self.d_loss_tracker = keras.metrics.Mean(name="d_loss")
         self.g_loss_tracker = keras.metrics.Mean(name="g_loss")
         self.gp_tracker = keras.metrics.Mean(name="gradient_penalty")
@@ -402,22 +402,22 @@ class TrafficWGAN(keras.Model):
         self.g_optimizer = g_optimizer
     
     def gradient_penalty(self, batch_size, real_trajectories, fake_trajectories):
-        """Calcula gradient penalty para WGAN-GP"""
+        """Calculates gradient penalty for WGAN-GP"""
         
-        # Gerar valores alpha aleatórios
+        # Generate random alpha values
         alpha = tf.random.uniform([batch_size, 1, 1], 0.0, 1.0)
         
-        # Interpolação entre trajetórias reais e falsas
+        # Interpolation between real and fake trajectories
         interpolated = alpha * real_trajectories + (1 - alpha) * fake_trajectories
         
         with tf.GradientTape() as tape:
             tape.watch(interpolated)
             pred = self.discriminator(interpolated, training=True)
         
-        # Calcular gradientes
+        # Calculate gradients
         grads = tape.gradient(pred, [interpolated])[0]
         
-        # Calcular norma dos gradientes
+        # Calculate gradient norm
         norm = tf.sqrt(tf.reduce_sum(tf.square(grads), axis=[1, 2]))
         
         # Gradient penalty
@@ -426,59 +426,59 @@ class TrafficWGAN(keras.Model):
         return gp
     
     def train_step(self, real_trajectories):
-        """Um passo de treinamento do WGAN-GP"""
+        """One training step of WGAN-GP"""
         
         batch_size = tf.shape(real_trajectories)[0]
         
-        # Treinar discriminador múltiplas vezes
+        # Train discriminator multiple times
         for _ in range(self.d_steps):
             
-            # Gerar ruído aleatório
+            # Generate random noise
             random_noise = tf.random.normal([batch_size, self.noise_dim])
             
             with tf.GradientTape() as tape:
-                # Gerar trajetórias falsas
+                # Generate fake trajectories
                 fake_trajectories = self.generator(random_noise, training=True)
                 
-                # Obter predições do discriminador
+                # Get discriminator predictions
                 real_pred = self.discriminator(real_trajectories, training=True)
                 fake_pred = self.discriminator(fake_trajectories, training=True)
                 
-                # Calcular Wasserstein loss
+                # Calculate Wasserstein loss
                 d_cost = tf.reduce_mean(fake_pred) - tf.reduce_mean(real_pred)
                 
-                # Calcular gradient penalty
+                # Calculate gradient penalty
                 gp = self.gradient_penalty(batch_size, real_trajectories, fake_trajectories)
                 
-                # Loss total do discriminador
+                # Total discriminator loss
                 d_loss = d_cost + gp * self.gp_weight
             
-            # Calcular gradientes e atualizar discriminador
+            # Calculate gradients and update discriminator
             d_gradient = tape.gradient(d_loss, self.discriminator.trainable_variables)
             self.d_optimizer.apply_gradients(
                 zip(d_gradient, self.discriminator.trainable_variables)
             )
         
-        # Treinar gerador
+        # Train generator
         random_noise = tf.random.normal([batch_size, self.noise_dim])
         
         with tf.GradientTape() as tape:
-            # Gerar trajetórias falsas
+            # Generate fake trajectories
             fake_trajectories = self.generator(random_noise, training=True)
             
-            # Obter predição do discriminador
+            # Get discriminator prediction
             fake_pred = self.discriminator(fake_trajectories, training=True)
             
-            # Loss do gerador (quer maximizar fake_pred)
+            # Generator loss (wants to maximize fake_pred)
             g_loss = -tf.reduce_mean(fake_pred)
         
-        # Calcular gradientes e atualizar gerador
+        # Calculate gradients and update generator
         g_gradient = tape.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(
             zip(g_gradient, self.generator.trainable_variables)
         )
         
-        # Atualizar métricas
+        # Update metrics
         self.d_loss_tracker.update_state(d_loss)
         self.g_loss_tracker.update_state(g_loss)
         self.gp_tracker.update_state(gp)
@@ -492,7 +492,7 @@ class TrafficWGAN(keras.Model):
         }
 
 
-# Criar modelo WGAN-GP
+# Create WGAN-GP model
 wgan = TrafficWGAN(
     discriminator=discriminator,
     generator=generator,
@@ -501,20 +501,20 @@ wgan = TrafficWGAN(
     d_steps=D_STEPS
 )
 
-# Compilar com otimizadores
+# Compile with optimizers
 wgan.compile(
     d_optimizer=keras.optimizers.Adam(learning_rate=LEARNING_RATE_D, beta_1=0.0, beta_2=0.9),
     g_optimizer=keras.optimizers.Adam(learning_rate=LEARNING_RATE_G, beta_1=0.0, beta_2=0.9)
 )
 
-print("🤖 Modelo WGAN-GP criado e compilado!")
+print("WGAN-GP model created and compiled!")
 
 # =============================================================================
-# CLASSE PARA DETECÇÃO DE ANOMALIAS
+# CLASS FOR ANOMALY DETECTION
 # =============================================================================
 
 class TrafficAnomalyDetector:
-    """Detector de anomalias usando WGAN-GP treinado"""
+    """Anomaly detector using trained WGAN-GP"""
     
     def __init__(self, wgan_model: TrafficWGAN, scaler: StandardScaler):
         self.wgan = wgan_model
@@ -525,17 +525,17 @@ class TrafficAnomalyDetector:
     def compute_anomaly_scores(self, trajectories: np.ndarray, 
                              n_samples: int = 50) -> np.ndarray:
         """
-        Computa scores de anomalia para trajetórias
+        Computes anomaly scores for trajectories
         
         Args:
-            trajectories: Array de trajetórias [n_traj, seq_len, features]
-            n_samples: Número de amostras sintéticas para comparação
+            trajectories: Array of trajectories [n_traj, seq_len, features]
+            n_samples: Number of synthetic samples for comparison
             
         Returns:
-            Array de scores de anomalia
+            Array of anomaly scores
         """
         
-        # Normalizar trajetórias
+        # Normalize trajectories
         original_shape = trajectories.shape
         trajectories_flat = trajectories.reshape(-1, original_shape[-1])
         trajectories_normalized = self.scaler.transform(trajectories_flat)
@@ -543,29 +543,29 @@ class TrafficAnomalyDetector:
         
         trajectories_tensor = tf.constant(trajectories_normalized, dtype=tf.float32)
         
-        # 1. Score do discriminador (invertido)
+        # 1. Discriminator score (inverted)
         discriminator_scores = -self.discriminator(trajectories_tensor, training=False)
         discriminator_scores = discriminator_scores.numpy().flatten()
         
-        # 2. Score de reconstrução baseado em distância
+        # 2. Reconstruction score based on distance
         reconstruction_scores = []
         
         for i in range(len(trajectories)):
             real_traj = trajectories_normalized[i]
             
-            # Gerar múltiplas trajetórias sintéticas
+            # Generate multiple synthetic trajectories
             noise = tf.random.normal([n_samples, self.wgan.noise_dim])
             synthetic_trajs = self.generator(noise, training=False).numpy()
             
-            # Calcular distâncias
+            # Calculate distances
             distances = np.sum((synthetic_trajs - real_traj[np.newaxis, :, :]) ** 2, axis=(1, 2))
             min_distance = np.min(distances)
             reconstruction_scores.append(min_distance)
         
         reconstruction_scores = np.array(reconstruction_scores)
         
-        # 3. Combinar scores
-        # Normalizar scores para [0, 1]
+        # 3. Combine scores
+        # Normalize scores to [0, 1]
         def normalize_scores(scores):
             if len(scores) <= 1:
                 return np.zeros_like(scores)
@@ -577,16 +577,16 @@ class TrafficAnomalyDetector:
         disc_norm = normalize_scores(discriminator_scores)
         recon_norm = normalize_scores(reconstruction_scores)
         
-        # Score final combinado (70% discriminador, 30% reconstrução)
+        # Final combined score (70% discriminator, 30% reconstruction)
         combined_scores = 0.7 * disc_norm + 0.3 * recon_norm
         
         return combined_scores
     
     def detect_anomalies(self, trajectories: np.ndarray, 
                         threshold_percentile: float = 90) -> Dict:
-        """Detecta anomalias em trajetórias"""
+        """Detects anomalies in trajectories"""
         
-        print(f"🔍 Detectando anomalias em {len(trajectories)} trajetórias...")
+        print(f"Detecting anomalies in {len(trajectories)} trajectories...")
         
         anomaly_scores = self.compute_anomaly_scores(trajectories)
         threshold = np.percentile(anomaly_scores, threshold_percentile)
@@ -601,23 +601,23 @@ class TrafficAnomalyDetector:
             'threshold_percentile': threshold_percentile
         }
         
-        print(f"✅ Detecção concluída:")
+        print(f"Detection completed:")
         print(f"   Threshold: {threshold:.4f}")
-        print(f"   Anomalias: {results['n_anomalies']}/{len(trajectories)}")
-        print(f"   Taxa: {results['anomaly_rate']:.2%}")
+        print(f"   Anomalies: {results['n_anomalies']}/{len(trajectories)}")
+        print(f"   Rate: {results['anomaly_rate']:.2%}")
         
         return results
     
     def evaluate_with_labels(self, trajectories: np.ndarray, 
                            true_labels: np.ndarray,
                            threshold_percentile: float = 90) -> Dict:
-        """Avalia modelo com rótulos verdadeiros"""
+        """Evaluates model with true labels"""
         
         anomaly_scores = self.compute_anomaly_scores(trajectories)
         threshold = np.percentile(anomaly_scores, threshold_percentile)
         predicted_labels = anomaly_scores > threshold
         
-        # Calcular métricas
+        # Calculate metrics
         tp = np.sum((predicted_labels == True) & (true_labels == True))
         tn = np.sum((predicted_labels == False) & (true_labels == False))
         fp = np.sum((predicted_labels == True) & (true_labels == False))
@@ -648,8 +648,8 @@ class TrafficAnomalyDetector:
             'true_labels': true_labels
         }
         
-        print(f"📊 Avaliação:")
-        print(f"   Precisão: {precision:.3f}")
+        print(f"Evaluation:")
+        print(f"   Precision: {precision:.3f}")
         print(f"   Recall: {recall:.3f}")
         print(f"   F1-Score: {f1_score:.3f}")
         print(f"   AUC-ROC: {auc_roc:.3f}")
@@ -658,32 +658,32 @@ class TrafficAnomalyDetector:
 
 
 # =============================================================================
-# FUNÇÃO PRINCIPAL
+# MAIN FUNCTION
 # =============================================================================
 
 def main():
-    """Função principal para treinar e avaliar o modelo"""
+    """Main function to train and evaluate the model"""
     
-    # Configurações de paths
+    # Path configurations
     DATA_DIR = r"D:\UTFPR\TCC\AI-City Challenge\output_directory\processedTrajectories"
     ANOMALY_CSV = r"D:\UTFPR\TCC\AI-City Challenge\train-anomaly-results.csv"
     MODEL_DIR = r"D:\UTFPR\TCC\AI-City Challenge\output_directory\tensorflow_wgan_gp"
     
     os.makedirs(MODEL_DIR, exist_ok=True)
     
-    print("🚗 SISTEMA TENSORFLOW WGAN-GP PARA DETECÇÃO DE ANOMALIAS EM TRÁFEGO")
+    print("TENSORFLOW WGAN-GP SYSTEM FOR TRAFFIC ANOMALY DETECTION")
     print("=" * 70)
     
     try:
-        # Carregar labels de anomalias
+        # Load anomaly labels
         anomaly_labels = None
         if os.path.exists(ANOMALY_CSV):
             anomaly_labels = TrafficAnomalyLabels(ANOMALY_CSV)
         else:
-            print("⚠️ Arquivo de anomalias não encontrado")
+            print("Warning: Anomaly file not found")
         
-        # Carregar dataset
-        print("\n📂 Carregando dataset de trajetórias...")
+        # Load dataset
+        print("\nLoading trajectory dataset...")
         dataset = TrafficTrajectoryDataset(
             DATA_DIR, 
             anomaly_labels, 
@@ -691,13 +691,13 @@ def main():
             validation_split=0.2
         )
         
-        # Preparar dados de treino
+        # Prepare training data
         train_dataset = dataset.get_train_dataset(BATCH_SIZE)
         val_data, val_labels = dataset.get_validation_data()
         
-        print(f"\n🚀 Iniciando treinamento por {EPOCHS} épocas...")
+        print(f"\nStarting training for {EPOCHS} epochs...")
         
-        # Callback para salvar melhor modelo
+        # Callback to save best model
         class ModelSaveCallback(keras.callbacks.Callback):
             def __init__(self, save_path):
                 self.save_path = save_path
@@ -707,14 +707,14 @@ def main():
                 current_wd = logs.get('wasserstein_distance', float('inf'))
                 if current_wd < self.best_wd:
                     self.best_wd = current_wd
-                    # FIX: Remove save_format and use .keras extension
+                    # Remove save_format and use .keras extension
                     self.model.generator.save(os.path.join(self.save_path, 'best_generator.keras'))
                     self.model.discriminator.save(os.path.join(self.save_path, 'best_discriminator.keras'))
-                    print(f"\n💾 Melhor modelo salvo! WD: {current_wd:.4f}")
+                    print(f"\nBest model saved! WD: {current_wd:.4f}")
 
         save_callback = ModelSaveCallback(MODEL_DIR)
         
-        # Treinar modelo
+        # Train model
         history = wgan.fit(
             train_dataset,
             epochs=EPOCHS,
@@ -722,35 +722,35 @@ def main():
             verbose=1
         )
         
-        print("\n🎉 Treinamento concluído!")
+        print("\nTraining completed!")
         
-        # Salvar histórico
+        # Save history
         history_path = os.path.join(MODEL_DIR, 'training_history.json')
         with open(history_path, 'w') as f:
-            # Converter numpy arrays para listas
+            # Convert numpy arrays to lists
             hist_dict = {}
             for key, values in history.history.items():
                 hist_dict[key] = [float(v) for v in values]
             json.dump(hist_dict, f, indent=2)
         
-        # Plotar histórico de treinamento
+        # Plot training history
         plot_training_history(history, MODEL_DIR)
         
-        # Carregar melhor modelo para avaliação
+        # Load best model for evaluation
         wgan.generator = keras.models.load_model(os.path.join(MODEL_DIR, 'best_generator.keras'))
         wgan.discriminator = keras.models.load_model(os.path.join(MODEL_DIR, 'best_discriminator.keras'))
 
-        # Criar detector
+        # Create detector
         detector = TrafficAnomalyDetector(wgan, dataset.scaler)
         
-        # Avaliar modelo
+        # Evaluate model
         if anomaly_labels:
-            print("\n🔍 Avaliando modelo...")
+            print("\nEvaluating model...")
             
             best_f1 = 0
             best_results = None
             
-            # 3. Try different thresholds
+            # Try different thresholds
             for percentile in [75, 80, 85, 90]:
                 results = detector.evaluate_with_labels(val_data, val_labels, percentile)
                 
@@ -760,9 +760,9 @@ def main():
                 
                 print(f"   {percentile}%: F1={results['f1_score']:.3f}")
             
-            print(f"\n🏆 Melhor F1-Score: {best_f1:.3f}")
+            print(f"\nBest F1-Score: {best_f1:.3f}")
             
-            # Salvar resultados
+            # Save results
             results_path = os.path.join(MODEL_DIR, 'evaluation_results.json')
             with open(results_path, 'w') as f:
                 save_results = {k: (v.tolist() if isinstance(v, np.ndarray) else v) 
@@ -771,48 +771,48 @@ def main():
                 json.dump(save_results, f, indent=2)
         
         else:
-            print("\n🔍 Teste de detecção (sem rótulos)...")
+            print("\nDetection test (without labels)...")
             results = detector.detect_anomalies(val_data)
         
-        print(f"\n📄 Resultados salvos em: {MODEL_DIR}")
-        print("✅ Processamento concluído!")
+        print(f"\nResults saved at: {MODEL_DIR}")
+        print("Processing completed!")
         
     except Exception as e:
-        print(f"\n❌ Erro: {e}")
+        print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
 
 
 def plot_training_history(history, save_dir):
-    """Plota histórico de treinamento"""
+    """Plots training history"""
     
     fig, axes = plt.subplots(2, 2, figsize=(15, 10))
     
     # Generator Loss
     axes[0, 0].plot(history.history['g_loss'], 'b-', linewidth=2)
     axes[0, 0].set_title('Generator Loss', fontweight='bold')
-    axes[0, 0].set_xlabel('Época')
+    axes[0, 0].set_xlabel('Epoch')
     axes[0, 0].set_ylabel('Loss')
     axes[0, 0].grid(True, alpha=0.3)
     
     # Discriminator Loss
     axes[0, 1].plot(history.history['d_loss'], 'r-', linewidth=2)
     axes[0, 1].set_title('Discriminator Loss', fontweight='bold')
-    axes[0, 1].set_xlabel('Época')
+    axes[0, 1].set_xlabel('Epoch')
     axes[0, 1].set_ylabel('Loss')
     axes[0, 1].grid(True, alpha=0.3)
     
     # Wasserstein Distance
     axes[1, 0].plot(history.history['wasserstein_distance'], 'g-', linewidth=2)
     axes[1, 0].set_title('Wasserstein Distance', fontweight='bold')
-    axes[1, 0].set_xlabel('Época')
+    axes[1, 0].set_xlabel('Epoch')
     axes[1, 0].set_ylabel('Distance')
     axes[1, 0].grid(True, alpha=0.3)
     
     # Gradient Penalty
     axes[1, 1].plot(history.history['gradient_penalty'], 'orange', linewidth=2)
     axes[1, 1].set_title('Gradient Penalty', fontweight='bold')
-    axes[1, 1].set_xlabel('Época')
+    axes[1, 1].set_xlabel('Epoch')
     axes[1, 1].set_ylabel('Penalty')
     axes[1, 1].grid(True, alpha=0.3)
     
@@ -820,7 +820,7 @@ def plot_training_history(history, save_dir):
     plt.savefig(os.path.join(save_dir, 'training_history.png'), dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(f"📊 Gráficos salvos em: {os.path.join(save_dir, 'training_history.png')}")
+    print(f"Plots saved at: {os.path.join(save_dir, 'training_history.png')}")
 
 
 if __name__ == "__main__":
